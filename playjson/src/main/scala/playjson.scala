@@ -98,6 +98,7 @@ object Main extends Demo {
     implicit val formatsCircle: Format[Circle] = CFormats.deriveInstance
     CFormats.deriveInstance
   }
+  implicit val readOpt: Reads[Option[Shape]] = Reads.optionWithNull
 
   sealed trait Shape
   final case class Rectangle(width: Double, height: Double) extends Shape
@@ -122,18 +123,23 @@ object Main extends Demo {
       Some(Circle(6)),
       None
     )
-  val inputRectangle = """{"width":1,"height":2}"""
-  val inputCircle = """{"radius":3}"""
+  val jsonRectangle: JsValue = Json.toJson(rectangle)
+  val jsonCircle: JsValue = Json.toJson(circle)
+  val jsonOptShapes: JsValue = Json.toJson(optShapes)
+  val jsonStringRectangle: String = Json.stringify(jsonRectangle)
+  val jsonStringCircle: String = Json.stringify(jsonCircle)
+  val jsonStringOptShapes: String = Json.stringify(jsonOptShapes)
 
   println("Rectangle " + rectangle)
-  println("Rectangle as Json:\n" + Json.toJson(rectangle))
+  println("Rectangle as Json:\n" + jsonRectangle)
   println("Circle " + circle)
-  println("Circle as Json:\n" + Json.toJson(circle))
+  println("Circle as Json:\n" + jsonCircle)
   println("Shapes " + shapes)
   println("Shapes as Json:\n" + Json.toJson(shapes))
   println("Optional shapes " + optShapes)
-  println("Optional shapes as Json:\n" + Json.toJson(optShapes))
-  println("Parsed Rectangle " + Json.parse(inputRectangle).as[Shape])
-  println("Parsed Circle " + Json.parse(inputCircle).as[Shape])
+  println("Optional shapes as Json:\n" + jsonOptShapes)
+  println("Parsed rectangle " + Json.parse(jsonStringRectangle).as[Shape])
+  println("Parsed circle " + Json.parse(jsonStringCircle).as[Shape])
+  println("Parsed optional shapes " + Json.parse(jsonStringOptShapes).as[List[Option[Shape]]])
 
 }
