@@ -19,16 +19,9 @@ object CWrites extends LabelledTypeClassCompanion[Writes] {
 
     def emptyCoproduct: Writes[CNil] = Writes(_ => JsNull)
 
-    def coproduct[L, R <: Coproduct](name: String, cl: => Writes[L], cr: => Writes[R]) = Writes[L :+: R]{ lr =>
-
-      val r = lr match {
-        case Inl(left)  => cl writes left
-        case Inr(right) => cr writes right
-      }
-      r match {
-        case JsNull => JsString(name)
-        case o      => o
-      }
+    def coproduct[L, R <: Coproduct](name: String, cl: => Writes[L], cr: => Writes[R]) = Writes[L :+: R]{
+      case Inl(left)  => cl writes left
+      case Inr(right) => cr writes right
     }
   }
 }
