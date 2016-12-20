@@ -13,17 +13,21 @@ scalacOptions in Global ++= Seq(
 )
 
 libraryDependencies in Global ++= Seq(
-  "com.chuusai"   %% "shapeless"     % "2.3.2",
-  "org.typelevel" %% "cats"          % "0.7.0",
-  "io.circe"      %% "circe-core"    % "0.7.0-M1",
-  "io.circe"      %% "circe-generic" % "0.7.0-M1",
-  "io.circe"      %% "circe-parser"  % "0.7.0-M1",
-  "org.scalactic" %% "scalactic"     % "2.2.6" % Test,
-  "org.scalatest" %% "scalatest"     % "2.2.6" % Test
+  "com.typesafe.play" %% "play-json" % "2.6.0-M1",
+  "com.chuusai"       %% "shapeless"     % "2.3.2",
+  "org.typelevel"     %% "cats"          % "0.7.0",
+  "io.circe"          %% "circe-core"    % "0.7.0-M1",
+  "io.circe"          %% "circe-generic" % "0.7.0-M1",
+  "io.circe"          %% "circe-parser"  % "0.7.0-M1",
+  "org.scalactic"     %% "scalactic"     % "2.2.6" % Test,
+  "org.scalatest"     %% "scalatest"     % "2.2.6" % Test
 )
 
 lazy val common =
   project.in(file("common"))
+
+lazy val playjson =
+  project.in(file("playjson")).dependsOn(common)
 
 lazy val representations =
   project.in(file("representations")).dependsOn(common)
