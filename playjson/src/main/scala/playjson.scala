@@ -1,88 +1,21 @@
-import play.api.libs.json._
+import play.api.libs.json.{JsObject, _}
 import shapeless.{`::` => :#:, _}
-
-object SWrites extends LabelledProductTypeClassCompanion[Writes] {
-  object typeClass extends LabelledProductTypeClass[Writes] {
-
-    def emptyProduct: Writes[HNil] = Writes(_ => Json.obj())
-
-    def product[F, T <: HList](name: String, FHead: Writes[F], FTail: Writes[T]) = Writes[F :#: T] {
-      case head :#: tail =>
-        val h = FHead.writes(head)
-        val t = FTail.writes(tail)
-
-        (h, t) match {
-          //case (h: JsValue, JsNull)      => Json.obj(name -> h)
-          case (JsNull, t: JsObject)     => t
-          case (h: JsValue, t: JsObject) => Json.obj(name -> h) ++ t
-          case _                         => Json.obj()
-        }
-    }
-    def project[F, G](instance: => Writes[G], to: F => G, from: G => F) = Writes[F](f => instance.writes(to(f)))
-  }
-}
-
-object SReads extends LabelledProductTypeClassCompanion[Reads] {
-  object typeClass extends LabelledProductTypeClass[Reads] {
-
-    def emptyProduct: Reads[HNil] = Reads(_ => JsSuccess(HNil))
-
-    def product[F, T <: HList](name: String, FHead: Reads[F], FTail: Reads[T]) = Reads[F :#: T] {
-      case obj @ JsObject(fields) =>
-        for {
-          head <- FHead.reads((obj \ name).get)
-          tail <- FTail.reads(obj - name)
-        } yield head :: tail
-
-      case _ => JsError("Json object required")
-    }
-
-    def project[F, G](instance: => Reads[G], to: F => G, from: G => F) = Reads[F](instance.map(from).reads)
-  }
-}
-
-object SFormats extends LabelledProductTypeClassCompanion[Format] {
-  object typeClass extends LabelledProductTypeClass[Format] {
-    def emptyProduct: Format[HNil] = Format(
-      SReads.typeClass.emptyProduct,
-      SWrites.typeClass.emptyProduct
-    )
-
-    def product[F, T <: HList](name: String, FHead: Format[F], FTail: Format[T]) = Format[F :#: T] (
-      SReads.typeClass.product[F, T](name, FHead, FTail),
-      SWrites.typeClass.product[F, T](name, FHead, FTail)
-    )
-
-    def project[F, G](instance: => Format[G], to: F => G, from: G => F) = Format[F](
-      SReads.typeClass.project(instance, to, from),
-      SWrites.typeClass.project(instance, to, from)
-    )
-  }
-}
-
 
 
 object CWrites extends LabelledTypeClassCompanion[Writes] {
   object typeClass extends LabelledTypeClass[Writes] {
 
-    def emptyProduct: Writes[HNil] = Writes(_ => JsNull)
+    def emptyProduct: Writes[HNil] = Writes(_ => Json.obj())
 
     def product[F, T <: HList](name: String, FHead: Writes[F], FTail: Writes[T]) = Writes[F :#: T] {
       case head :#: tail =>
-
-        val h = FHead.writes(head)
-        val t = FTail.writes(tail)
-
-        (h, t) match {
-          //case (h: JsValue, JsNull)      => Json.obj(name -> h)
+        (FHead.writes(head), FTail.writes(tail)) match {
           case (JsNull, t: JsObject)     => t
-          case (h: JsValue, t: JsObject) => Json.obj(name -> h) ++ t
+          case (h: JsValue, t: JsObject) => JsObject(Seq(name -> h)) ++ t
           case _                         => Json.obj()
         }
     }
-    def project[F, G](instance: => Writes[G], to: F => G, from: G => F) = Writes[F]{ f =>
-      instance.writes(to(f))
-    }
+    def project[F, G](instance: => Writes[G], to: F => G, from: G => F) = Writes[F](f => instance.writes(to(f)))
 
     def emptyCoproduct: Writes[CNil] = Writes(_ => JsNull)
 
@@ -106,12 +39,16 @@ object CReads extends LabelledTypeClassCompanion[Reads] {
     def emptyProduct: Reads[HNil] = Reads(_ => JsSuccess(HNil))
 
     def product[F, T <: HList](name: String, FHead: Reads[F], FTail: Reads[T]) = Reads[F :#: T] {
-      case obj @ JsObject(fields) =>
-        for {
-          head <- FHead.reads((obj \ name).get)
-          tail <- FTail.reads(obj - name)
-        } yield head :: tail
-
+      case obj @ JsObject(_) =>
+        obj \ name match {
+          case JsDefined(field) =>
+            for {
+              head <- FHead.reads(field)
+              tail <- FTail.reads(obj - name)
+            } yield head :: tail
+          case _ =>
+            JsError(s"Field $name missing")
+        }
       case _ => JsError("Json object required")
     }
 
@@ -120,8 +57,7 @@ object CReads extends LabelledTypeClassCompanion[Reads] {
     def emptyCoproduct: Reads[CNil] = Reads[CNil](_ => JsError("CNil object not available"))
 
     def coproduct[L, R <: Coproduct](name: String, cl: => Reads[L], cr: => Reads[R]) = Reads[L :+: R] {
-      case js@JsString(n) if n == name => cl.reads(js).map(Inl.apply)
-      case js@_ => cr.reads(js).map(Inr.apply)
+      js => cl.reads(js).map(Inl.apply) orElse cr.reads(js).map(Inr.apply)
     }
   }
 }
@@ -167,6 +103,8 @@ object Main extends Demo {
   final case class Rectangle(width: Double, height: Double) extends Shape
   final case class Circle(radius: Double) extends Shape
 
+  val rectangle = Rectangle(1, 2)
+  val circle = Circle(3)
   val shapes: List[Shape] =
     List(
       Rectangle(1, 2),
@@ -184,9 +122,18 @@ object Main extends Demo {
       Some(Circle(6)),
       None
     )
+  val inputRectangle = """{"width":1,"height":2}"""
+  val inputCircle = """{"radius":3}"""
 
+  println("Rectangle " + rectangle)
+  println("Rectangle as Json:\n" + Json.toJson(rectangle))
+  println("Circle " + circle)
+  println("Circle as Json:\n" + Json.toJson(circle))
   println("Shapes " + shapes)
   println("Shapes as Json:\n" + Json.toJson(shapes))
   println("Optional shapes " + optShapes)
   println("Optional shapes as Json:\n" + Json.toJson(optShapes))
+  println("Parsed Rectangle " + Json.parse(inputRectangle).as[Shape])
+  println("Parsed Circle " + Json.parse(inputCircle).as[Shape])
+
 }
