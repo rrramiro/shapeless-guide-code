@@ -1,6 +1,6 @@
 import play.api.libs.json.{JsObject, _}
+import shapeless.labelled.FieldType
 import shapeless.{`::` => :#:, _}
-
 
 object CWrites extends LabelledTypeClassCompanion[Writes] {
   object typeClass extends LabelledTypeClass[Writes] {
@@ -19,7 +19,7 @@ object CWrites extends LabelledTypeClassCompanion[Writes] {
 
     def emptyCoproduct: Writes[CNil] = Writes(_ => JsNull)
 
-    def coproduct[L, R <: Coproduct](name: String, cl: => Writes[L], cr: => Writes[R]) = Writes[L :+: R]{
+    def coproduct[L, R <: Coproduct](name: String, cl: => Writes[L], cr: => Writes[R]) = Writes[L :+: R] {
       case Inl(left)  => cl writes left
       case Inr(right) => cr writes right
     }
@@ -62,7 +62,7 @@ object CFormats extends LabelledTypeClassCompanion[Format] {
       CWrites.typeClass.emptyProduct
     )
 
-    def product[F, T <: HList](name: String, FHead: Format[F], FTail: Format[T]) = Format[F :#: T] (
+    def product[F, T <: HList](name: String, FHead: Format[F], FTail: Format[T]) = Format[F :#: T](
       CReads.typeClass.product[F, T](name, FHead, FTail),
       CWrites.typeClass.product[F, T](name, FHead, FTail)
     )
@@ -86,12 +86,58 @@ object CFormats extends LabelledTypeClassCompanion[Format] {
 
 object Main extends Demo {
 
-  implicit val formatsShape: Format[Shape] = {
-    implicit val formatsRectangle: Format[Rectangle] = CFormats.deriveInstance
-    implicit val formatsCircle: Format[Circle] = CFormats.deriveInstance
-    CFormats.deriveInstance
+  //  implicit val formatsShape: Format[Shape] = {
+  //    implicit val formatsRectangle: Format[Rectangle] = CFormats.deriveInstance
+  //    implicit val formatsCircle: Format[Circle] = CFormats.deriveInstance
+  //    CFormats.deriveInstance
+  //  }
+  //  implicit val readOpt: Reads[Option[Shape]] = Reads.optionWithNull
+
+  implicit val hnilEncoder: Writes[HNil] = Writes[HNil] {
+    hnil => Json.obj()
   }
-  implicit val readOpt: Reads[Option[Shape]] = Reads.optionWithNull
+
+  implicit val cnilEncoder: Writes[CNil] = Writes[CNil] {
+    cnil => ???
+  }
+
+  implicit def hlistWrites[K <: Symbol, H, T <: HList](
+    implicit
+    witness: Witness.Aux[K],
+    FHead: Lazy[Writes[H]],
+    FTail: Writes[T]
+  ) = Writes[FieldType[K, H] :#: T] {
+    case head :#: tail =>
+      val (hh, tt) = (FHead.value.writes(head), FTail.writes(tail))
+      println("head" + hh)
+      println("tail" + tt)
+      (hh, tt) match {
+        case (JsNull, t: JsObject)     => t
+        case (h: JsValue, t: JsObject) => JsObject(Seq(witness.value.name -> h)) ++ t
+        case _                         => Json.obj()
+      }
+  }
+
+  implicit def coproductWrites[K <: Symbol, H, T <: Coproduct](
+    implicit
+    witness: Witness.Aux[K],
+    cl: Lazy[Writes[H]],
+    cr: Writes[T]
+  ) = Writes[FieldType[K, H] :+: T] {
+    case Inl(left) =>
+      cl.value writes left
+    case Inr(right) =>
+      cr writes right
+  }
+
+  implicit def genericWrites[A, R](
+    implicit
+    gen: LabelledGeneric.Aux[A, R],
+    enc: Lazy[Writes[R]]
+  ): Writes[A] = Writes[A] {
+    a =>
+      enc.value.writes(gen.to(a))
+  }
 
   sealed trait Shape
   final case class Rectangle(width: Double, height: Double) extends Shape
@@ -131,8 +177,8 @@ object Main extends Demo {
   println("Shapes as Json:\n" + Json.toJson(shapes))
   println("Optional shapes " + optShapes)
   println("Optional shapes as Json:\n" + jsonOptShapes)
-  println("Parsed rectangle " + Json.parse(jsonStringRectangle).as[Shape])
-  println("Parsed circle " + Json.parse(jsonStringCircle).as[Shape])
-  println("Parsed optional shapes " + Json.parse(jsonStringOptShapes).as[List[Option[Shape]]])
+  //  println("Parsed rectangle " + Json.parse(jsonStringRectangle).as[Shape])
+  //  println("Parsed circle " + Json.parse(jsonStringCircle).as[Shape])
+  //  println("Parsed optional shapes " + Json.parse(jsonStringOptShapes).as[List[Option[Shape]]])
 
 }
