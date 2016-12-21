@@ -1,5 +1,6 @@
 import shapeless.Witness
-import shapeless.labelled.{KeyTag, FieldType}
+import shapeless.labelled.{FieldType, KeyTag}
+import shapeless.syntax.SingletonOps
 import shapeless.syntax.singleton._
 
 object Main extends Demo {
@@ -38,8 +39,8 @@ object Main extends Demo {
   //
   // The type of each expression is '42', sometimes written "Int(42)".
   // This type is a subtype of Int. The only permitted value is 42.
-  val theAnswer: 42 = 6 * 7  // syntax for Typelevel Scala 2.11.8+ or Lightbend Scala 2.12.1+
-  val theAnswer2 = 42.narrow // syntax for older Scala compilers
+//  val theAnswer: 42 = 6 * 7  // syntax for Typelevel Scala 2.11.8+ or Lightbend Scala 2.12.1+
+  val theAnswer = 42.narrow // syntax for older Scala compilers
 
   println("Some number " + someNumber)
   println("The answer " + theAnswer)
@@ -70,6 +71,7 @@ object Main extends Demo {
   def getTagAsValue[K, A](value: FieldType[K, A])(implicit witness: Witness.Aux[K]): K =
     witness.value
 
+  println("tagged expression: " + tagged)
   println("Value of tagged expression: " + getFieldValue(tagged))
   println("Tag from tagged expression: " + getTagAsValue(tagged))
 }
